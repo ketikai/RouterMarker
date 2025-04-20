@@ -35,7 +35,7 @@ IMAGE_FILE_EXTENSION_LEN = len(".png")
 
 # noinspection PyUnusedLocal
 def update_image_paths(*args):
-    global last_dir_path, dir_path, image_paths
+    global last_dir_path, dir_path, image_paths, select_title
     _dir_path = dir_path.get()
     if last_dir_path == _dir_path:
         return
@@ -50,13 +50,15 @@ def update_image_paths(*args):
     image_paths.set(str(_paths))
     if len(_paths) > 0:
         select_image(0)
+    else:
+        select_title.set("0 / 0")
 
 showing = None
 
 
 # noinspection PyUnusedLocal
 def on_select(*args):
-    global image_path_list,image_view, image_title, action_title, showing
+    global image_path_list, image_view, image_title, action_title, selected_action, selected_action_callback, showing
     selection = image_path_list.curselection()
     if selection is not None:
         index = selection
@@ -69,7 +71,16 @@ def on_select(*args):
         # noinspection PyTypeChecker
         image_view.configure(image=showing)
         image_title.set(_file)
-        action_title.set(action_table[load_action_txt(os.path.join(_dir_path, _file + ACTION_FILE_EXTENSION))])
+        _action = load_action_txt(os.path.join(_dir_path, _file + ACTION_FILE_EXTENSION))
+        if _action is not None:
+            selected_action_callback = False
+            selected_action.set(0)
+            selected_action_callback = True
+            action_title.set(action_table[_action + 1])
+        else:
+            selected_action.set(0)
+            action_title.set(action_table[0])
+        select_title.set(f"{index + 1} / {image_path_list.size()}")
 
 
 def select_image(index):
@@ -109,26 +120,34 @@ def on_key_press(event):
 
 ACTION_FILE_EXTENSION = ".txt"
 def save_action_txt(action_file, content):
-    with open(action_file, "w") as f: f.write(str(content))
+    if 0 <= content < 9:
+        with open(action_file, "w") as f: f.write(str(content))
 
 def load_action_txt(action_file):
+    if not os.path.exists(action_file):
+        return None
     with open(action_file, "r") as f:
         _action = f.readline()
         if _action and _action != "":
-            return int(_action)
-        return 0
+            _action = int(_action)
+            if 0 <= _action < 9:
+                return _action
+        return None
 
 
 # noinspection PyUnusedLocal
 def update_action_txt(*args):
-    global image_path_list, action_title, dir_path, selected_action, pool
+    global image_path_list, action_title, dir_path, selected_action, pool, selected_action_callback
+    if not selected_action_callback:
+        return
     selection = image_path_list.curselection()
-    if selection:
+    if selection is not None:
         index = selection
         _file = image_path_list.get(index)
-        action_file = os.path.join(dir_path.get(), _file + ACTION_FILE_EXTENSION)
         _action = selected_action.get()
-        pool.apply(func=save_action_txt, args=(action_file, _action,))
+        if _action > 0:
+            action_file = os.path.join(dir_path.get(), _file + ACTION_FILE_EXTENSION)
+            pool.apply(func=save_action_txt, args=(action_file, _action - 1,))
         action_title.set(action_table[_action])
 
 
@@ -136,7 +155,7 @@ if __name__ == '__main__':
     multiprocessing.freeze_support()
     pool = Pool(1)
     root = tk.CTk()
-    root.title('mark')
+    root.title('RouterMarker')
     center_window(root, 1280, 720)
     root.resizable(False, False)
 
@@ -171,19 +190,23 @@ if __name__ == '__main__':
     selected_action = tk.IntVar()
     action_title = tk.StringVar()
     tk.CTkEntry(action_container, textvariable=action_title, state="readonly").pack(side=tk.TOP, fill=tk.X, padx=2)
-    action_table = ["停止移动", "向上移动", "向下移动", "向左移动", "向右移动", "向左上移动", "向左下移动", "向右上移动", "向右下移动"]
+    action_table = ["无动作", "停止移动", "向上移动", "向下移动", "向左移动", "向右移动", "向左上移动", "向左下移动", "向右上移动", "向右下移动"]
     for action in range(len(action_table)):
         action_button = tk.CTkRadioButton(action_container, text=action_table[action], value=action, variable=selected_action)
         action_button.pack(side=tk.TOP, fill=tk.X, padx=2, pady=5)
+    selected_action_callback = True
     selected_action.trace_add("write", update_action_txt)
 
     select_container = tk.CTkFrame(image_browser)
     select_container.pack(side=tk.LEFT, fill=tk.BOTH)
+    select_title = tk.StringVar()
+    tk.CTkEntry(select_container, textvariable=select_title, state="readonly").pack(side=tk.TOP, fill=tk.X, padx=2)
     image_path_list = CTkListbox(select_container, listvariable=image_paths, command=on_select)
     image_path_list.pack(fill=tk.BOTH, expand=True, padx=2)
 
     dir_path.set(os.path.abspath("."))
     selected_action.set(0)
+    select_title.set("0 / 0")
     root.bind("<KeyRelease>", on_key_press)
     root.mainloop()
     pool.close()
