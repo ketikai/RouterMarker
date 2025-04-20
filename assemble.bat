@@ -1,0 +1,1 @@
+pyinstaller --noconfirm --onedir --windowed --icon "./icon.ico" --name "RouterMarker" --add-data "./.venv/Lib/site-packages/customtkinter;customtkinter/" "./src/app/app.py"
